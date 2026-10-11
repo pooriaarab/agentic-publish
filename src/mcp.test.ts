@@ -6,6 +6,7 @@ import {
   AllowAllApprovalHook,
   DenyAllApprovalHook,
   MemoryQueueStore,
+  Pacer,
   type PublishReceipt,
   type SocialPost,
 } from "./publish.js";
@@ -42,6 +43,10 @@ describe("mcp server", () => {
       adapters: chain,
       queueStore: new MemoryQueueStore(),
       approval: new AllowAllApprovalHook(),
+      pacer: new Pacer({
+        minIntervalMs: { x: 0, linkedin: 0, tiktok: 0, instagram: 0 },
+        jitterMs: 0,
+      }),
     });
     try {
       const tools = await client.listTools();

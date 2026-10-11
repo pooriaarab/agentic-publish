@@ -760,7 +760,10 @@ export interface ApprovalHook {
 export class AllowAllApprovalHook implements ApprovalHook {
   readonly name = "allow-all";
 
-  async requestApproval(): Promise<ApprovalDecision> {
+  async requestApproval(
+    _post: SocialPost,
+    _context: ApprovalContext,
+  ): Promise<ApprovalDecision> {
     return { approved: true, approver: "allow-all" };
   }
 }
@@ -768,7 +771,10 @@ export class AllowAllApprovalHook implements ApprovalHook {
 export class DenyAllApprovalHook implements ApprovalHook {
   readonly name = "deny-all";
 
-  async requestApproval(): Promise<ApprovalDecision> {
+  async requestApproval(
+    _post: SocialPost,
+    _context: ApprovalContext,
+  ): Promise<ApprovalDecision> {
     return { approved: false, reason: "deny-all hook refuses every live publish" };
   }
 }
