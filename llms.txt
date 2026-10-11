@@ -1,0 +1,16 @@
+# agentic-publish
+
+Route social posts across Content Rabbit, Zernio, Ayrshare, and direct APIs.
+
+Keywords: social, publish, content-rabbit, zernio, ayrshare.
+
+- SDK: import { publishPost, defaultAdapters } from "agentic-publish".
+- CLI: agentic-publish publish --text "..." --targets x.
+- MCP: run agentic-publish mcp, then call publish_post.
+
+## Docs
+
+- README: https://github.com/pooriaarab/agentic-publish
+- Core contract: https://github.com/pooriaarab/agentic-publish/blob/main/docs/agentic-core.md
+- Onboarding: https://github.com/pooriaarab/agentic-publish/blob/main/docs/onboarding.md
+- License: MIT
