@@ -1,0 +1,9 @@
+{
+  // Sample worker config. Deploy with wrangler deploy from the pack root.
+  "name": "agentic-publish",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-01-01",
+  "vars": {
+    "PACK_NAME": "agentic-publish"
+  }
+}
