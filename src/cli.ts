@@ -232,7 +232,7 @@ function readInput(request: CliRequest, io: CliIo): string {
 
 function pickAdapters(request: CliRequest, io: CliIo): PublishAdapter[] {
   if (!request.adapters || request.adapters.includes("all")) {
-    return io.adapters.filter((adapter) => ["content-rabbit", "zernio", "ayrshare"].includes(adapter.name));
+    return io.adapters.filter((adapter) => ["content-rabbit", "zernio", "ayrshare", "postiz"].includes(adapter.name));
   }
   return request.adapters.map((name) => {
     const found = io.adapters.find((adapter) => adapter.name === name.toLowerCase());

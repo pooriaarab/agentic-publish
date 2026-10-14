@@ -333,6 +333,69 @@ export class AyrshareAdapter extends RemoteAdapter {
 }
 
 // Direct X. Posts text to X with a user-context bearer token.
+// Postiz. Self-hosted, so no per-profile fee. You run the server and
+// supply one integration id per channel: POSTIZ_INTEGRATION_INSTAGRAM,
+// POSTIZ_INTEGRATION_TIKTOK, and so on. Base: POSTIZ_BASE_URL.
+
+export class PostizAdapter extends RemoteAdapter {
+  readonly name = "postiz";
+
+  async publish(post: SocialPost): Promise<PublishReceipt> {
+    validatePost(post);
+    const apiKey = this.key("POSTIZ_API_KEY");
+    const base = this.options.baseUrl ?? this.opt("POSTIZ_BASE_URL") ?? "http://localhost:3000/api";
+    const platforms = aggregatorPlatforms(post.targets);
+    const posts = platforms.map((platform) => {
+      const integration = this.opt(`POSTIZ_INTEGRATION_${platform.toUpperCase()}`);
+      if (!integration) {
+        throw new VendorError(`postiz: set POSTIZ_INTEGRATION_${platform.toUpperCase()} for ${platform}`);
+      }
+      return {
+        integration: { id: integration },
+        value: [{ content: post.text, ...(post.mediaUrls?.length ? { image: post.mediaUrls.map((path) => ({ path })) } : {}) }],
+        settings: {},
+      };
+    });
+    const created = dataOf(
+      await this.json(`${base}/public/v1/posts`, {
+        method: "POST",
+        headers: bearer(apiKey),
+        body: JSON.stringify({ type: "now", date: new Date().toISOString(), posts }),
+      }),
+      this.name,
+    );
+    return this.receipt(post.targets, receiptId(created, this.name, ["id", "postId"]));
+  }
+}
+
+// Phone. Queues a post task for agentic-device on the owner's phone.
+// It never posts by itself; the phone claims and runs the task.
+
+export interface PhoneAdapterOptions extends AdapterOptions {
+  enqueue?: (task: { platform: string; text: string; mediaUrls?: string[] }) => string;
+}
+
+export class PhoneAdapter extends RemoteAdapter {
+  readonly name = "phone";
+  private readonly enqueueFn?: PhoneAdapterOptions["enqueue"];
+
+  constructor(options: PhoneAdapterOptions = {}) {
+    super(options);
+    this.enqueueFn = options.enqueue;
+  }
+
+  async publish(post: SocialPost): Promise<PublishReceipt> {
+    validatePost(post);
+    const targets = aggregatorPlatforms(post.targets);
+    const ids = targets.map((platform) =>
+      this.enqueueFn
+        ? this.enqueueFn({ platform, text: post.text, mediaUrls: post.mediaUrls })
+        : `phone-task-${platform}-${Date.now()}`,
+    );
+    return this.receipt(post.targets, ids.join(","));
+  }
+}
+
 // Media needs uploaded media ids, which this adapter does not mint.
 
 export class XAdapter extends RemoteAdapter {
@@ -932,11 +995,11 @@ export interface AdapterSetOptions {
   timeoutMs?: number;
 }
 
-export const CHAIN_ADAPTERS = ["content-rabbit", "zernio", "ayrshare"] as const;
+export const CHAIN_ADAPTERS = ["content-rabbit", "zernio", "ayrshare", "postiz"] as const;
 
 export function defaultAdapters(options: AdapterSetOptions = {}): PublishAdapter[] {
   const shared = { fetchFn: options.fetchFn, timeoutMs: options.timeoutMs };
-  return [new ContentRabbitAdapter(shared), new ZernioAdapter(shared), new AyrshareAdapter(shared)];
+  return [new ContentRabbitAdapter(shared), new ZernioAdapter(shared), new AyrshareAdapter(shared), new PostizAdapter(shared)];
 }
 
 export function allAdapters(options: AdapterSetOptions = {}): PublishAdapter[] {
@@ -947,6 +1010,7 @@ export function allAdapters(options: AdapterSetOptions = {}): PublishAdapter[] {
     new LinkedInAdapter(shared),
     new TikTokAdapter(shared),
     new InstagramAdapter(shared),
+    new PhoneAdapter(shared),
   ];
 }
 
