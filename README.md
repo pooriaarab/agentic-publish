@@ -29,6 +29,11 @@ npx agentic-publish publish --text "Hello" --targets x,linkedin
 Expect `dryRun: true`, targets `x` and `linkedin`, and adapters `private-repo-c4e6`, `zernio`, and `ayrshare`.
 No vendor request runs. A preview validates shared inputs, not vendor credentials or account permissions.
 
+| Adapter | Setup | Posts through |
+| --- | --- | --- |
+| postiz | POSTIZ_API_KEY plus POSTIZ_BASE_URL and POSTIZ_INTEGRATION_<PLATFORM> | Self-hosted Postiz posts API |
+| phone | none; queues a task for agentic-device | Phone post task on your own iPhone |
+
 Save this as `preview.mjs`, then run `node preview.mjs`:
 
 ```js

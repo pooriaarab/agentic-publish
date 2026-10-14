@@ -15,7 +15,7 @@ describe("worker", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       limits: { x: { maxChars: 280 } },
-      chain: ["private-repo-c4e6", "zernio", "ayrshare"],
+      chain: ["private-repo-c4e6", "zernio", "ayrshare", "postiz"],
     });
   });
 

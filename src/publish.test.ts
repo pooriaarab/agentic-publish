@@ -540,12 +540,15 @@ describe("publishPost chain", () => {
   });
 
   test("selectAdapters resolves the chain and direct pins", () => {
-    expect(selectAdapters([]).map((adapter) => adapter.name)).toEqual(["private-repo-c4e6", "zernio", "ayrshare"]);
+    expect(selectAdapters([]).map((adapter) => adapter.name)).toEqual(["private-repo-c4e6", "zernio", "ayrshare", "postiz"]);
     expect(selectAdapters(["all"]).map((adapter) => adapter.name)).toEqual([
       "private-repo-c4e6",
       "zernio",
       "ayrshare",
+      "postiz",
     ]);
+    expect(selectAdapters(["phone"]).map((adapter) => adapter.name)).toEqual(["phone"]);
+    expect(selectAdapters(["postiz"]).map((adapter) => adapter.name)).toEqual(["postiz"]);
     expect(selectAdapters(["x", "tiktok"]).map((adapter) => adapter.name)).toEqual(["x", "tiktok"]);
     expect(() => selectAdapters(["fax"])).toThrow(/unknown adapter/);
   });

@@ -1,7 +1,7 @@
 {
   "name": "agentic-publish",
-  "version": "0.1.1",
-  "description": "Publish and queue social posts through Content Rabbit, Zernio, Ayrshare, X, LinkedIn, TikTok, and Instagram with TypeScript, CLI, and MCP.",
+"version": "0.2.0",
+  "description": "Publish and queue social posts through Content Rabbit, Zernio, Ayrshare, Postiz, phone, X, LinkedIn, TikTok, and Instagram with TypeScript, CLI, and MCP.",
   "keywords": [
     "social-publishing",
     "private-repo-c4e6",
