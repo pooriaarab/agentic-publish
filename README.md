@@ -1,126 +1,259 @@
-# Agentic publish
+# agentic-publish
 
-Route social posts across Content Rabbit, Zernio, Ayrshare, and direct APIs.
+[![npm version](https://img.shields.io/npm/v/agentic-publish)](https://www.npmjs.com/package/agentic-publish)
+[![Monthly downloads](https://img.shields.io/npm/dm/agentic-publish)](https://www.npmjs.com/package/agentic-publish)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://opensource.org/license/mit)
 
-Post a launch note to X and LinkedIn at once.
-Queue a week of posts per brand, then drain each queue.
-Fall back to Zernio when Content Rabbit fails.
-Pin one channel with a direct API call.
+[Package](https://www.npmjs.com/package/agentic-publish) · [Setup](#preview-your-first-post) · [API and commands](#runtime-surfaces) · [Comparisons](#compare) · [llms.txt](https://github.com/pooriaarab/agentic-publish/blob/main/llms.txt)
 
-## Start
+agentic-publish is an open-source social publishing router for developers who use multiple posting APIs.
+It provides a TypeScript software development kit (SDK), command-line interface (CLI), and Model Context Protocol (MCP) server.
+Brand queues and approval hooks support local workflows; publishing defaults to previews.
 
-Use Node 18 or later. Install and check the pack:
+## Install
 
 ```sh
-npm install
-npm run build
-npm run typecheck
-npm test
-node dist/cli.js --help
-node dist/cli.js publish --text "Hello" --targets x,linkedin
-node dist/cli.js queue enqueue --brand acme --text "Hello" --targets x
-node dist/cli.js queue list --brand acme
-node dist/cli.js pacing
-node dist/cli.js costs
+npm install agentic-publish
 ```
 
-Publish defaults to a dry run. It calls no vendor and records no cost.
-Add `--live` to post for real. A live post walks the chain in order:
-Content Rabbit first, then Zernio, then Ayrshare. The first win ends
-the walk. Each failed adapter is reported. When every adapter fails,
-the CLI exits 1. Bad usage exits 2.
+Use Node.js 18 or later. TypeScript declarations are included; the package has three direct runtime dependencies.
 
-Live posts need approval. Pass `--auto-approve`, set
-`AGENTIC_PUBLISH_AUTO_APPROVE=1`, or point `AGENTIC_APPROVE_URL` at an
-approval service. A denied post stays denied and exits 1.
+## Preview your first post
 
-Cost entries count posts, not currency.
-Reports stay in the current process and reset when it exits.
+Run a preview without credentials or environment variables:
 
-## Adapters
+```sh
+npx agentic-publish publish --text "Hello" --targets x,linkedin
+```
 
-| Adapter | Setup | Posts through |
-| --- | --- | --- |
-| private-repo-c4e6 | CONTENT_RABBIT_API_KEY | Content Rabbit drafts plus publish |
-| zernio | ZERNIO_API_KEY | Zernio posts API |
-| ayrshare | AYRSHARE_API_KEY | Ayrshare post API |
-| x | X_BEARER_TOKEN | X API v2 tweets |
-| linkedin | LINKEDIN_ACCESS_TOKEN plus LINKEDIN_AUTHOR_URN | LinkedIn UGC posts |
-| tiktok | TIKTOK_ACCESS_TOKEN plus TIKTOK_OPEN_ID | TikTok content posting |
-| instagram | INSTAGRAM_ACCESS_TOKEN plus INSTAGRAM_USER_ID | Instagram content publishing |
+Expect `dryRun: true`, targets `x` and `linkedin`, and adapters `private-repo-c4e6`, `zernio`, and `ayrshare`.
+No vendor request runs. A preview validates shared inputs, not vendor credentials or account permissions.
 
-Keys also accept `apiKey` in adapter constructors.
-Network adapters accept `fetchFn` and `timeoutMs`.
-Select adapters with `--adapter`, or use `all` for the default chain.
-Direct X and LinkedIn posts take text (LinkedIn also takes a link).
-Direct TikTok needs a video URL. Direct Instagram needs a media URL.
-Route mixed media posts through the chain instead.
-
-## Pacing and queues
-
-Each channel keeps a gap between posts: 90 seconds for X, 3 minutes
-for LinkedIn, 5 minutes for TikTok and Instagram. A jitter of up to
-15 seconds keeps posts off a fixed beat. The pacer waits before a
-live post and marks each target after a win.
-
-Each brand holds its own queue. Enqueue per brand, list per brand,
-and drain one brand at a time. Draining previews by default; add
-`--live` to post. Sent entries leave the queue. Failed entries stay
-with a raised attempt count. The queue lives in
-`.agentic-publish-queue.json`, or in `AGENTIC_PUBLISH_QUEUE`.
-
-## SDK
+Save this as `preview.mjs`, then run `node preview.mjs`:
 
 ```js
-import { publishPost, defaultAdapters, AllowAllApprovalHook } from "agentic-publish";
+import { publishPost, defaultAdapters } from 'agentic-publish';
 
 const preview = await publishPost(
-  { text: "Hello", targets: ["x", "linkedin"] },
+  { text: 'Hello', targets: ['x', 'linkedin'] },
   { adapters: defaultAdapters() },
 );
 console.log(preview);
 ```
 
-publishPost accepts adapters, guards, logger, dryRun, approval, and
-pacer. It checks guards before any adapter call and walks the chain
-on live sends. Each live adapter call records a publish entry,
-including zero units on failure. Dry run is the default. Pass
-`dryRun: false` with an approval hook to post for real.
+Expect the same dry-run plan.
 
-## MCP
+## How it works
 
-Start the server with `agentic-publish mcp` or `npx agentic-publish mcp`.
-
-| Tool | Use it for |
-| --- | --- |
-| publish_post | Publish one post. Dry run is the default. |
-| queue_enqueue | Add one post to a brand queue. |
-| queue_list | List queued posts. |
-| queue_remove | Drop one queued post. |
-| queue_drain | Publish one brand queue in order. Dry run is the default. |
-| pacing_status | Read pacing gaps and char limits. |
-| get_cost_report | Read session cost totals. |
-
-## Worker
-
-The pack ships a worker face with three routes: `GET /health`,
-`GET /limits`, and `POST /preview`. Preview checks a post and
-returns the dry run plan. Deploy with wrangler:
-
-```sh
-npx wrangler deploy
+```text
+SDK / CLI / MCP -> shared validation -> preview plan
+                                   -> approval -> optional pacer
+                                               -> Content Rabbit
+                                               -> Zernio on failure
+                                               -> Ayrshare on failure
+Explicit adapter selection --------------------> selected adapter chain
+Brand queue -> drain --------------------------> same publish flow
 ```
 
-## Rules
+## Why it exists
 
-- Preview each post with a dry run first.
-- Approve each live post. Report denials as failures.
-- Respect pacing. Never bypass the wait to post faster.
-- Report guard denials and adapter errors as failures.
-- Read the cost report at the end.
+Content Rabbit, Zernio, and Ayrshare expose different publishing APIs.
+agentic-publish tries an ordered adapter chain and reports failed attempts.
+It also offers direct channel adapters and brand queues in your own process.
 
-## Docs
+## Compare
 
-- Core contract: https://github.com/pooriaarab/agentic-publish/blob/main/docs/agentic-core.md
-- Onboarding: https://github.com/pooriaarab/agentic-publish/blob/main/docs/onboarding.md
-- License: MIT
+Scope checked on 2026-10-14 against [Ayrshare documentation](https://www.ayrshare.com/docs/introduction).
+
+| Aspect | agentic-publish | Ayrshare |
+| --- | --- | --- |
+| Scope | Local router and queue library | Managed social media API |
+| Configuration | Adapter instances, flags, environment | Vendor API and connected accounts |
+| Queue storage | Local file or supplied store | Vendor service |
+| Coverage here | Four target names | This wrapper passes four target names to Ayrshare |
+
+The wrapper exposes only the operations implemented below, rather than the full vendor API.
+
+## Coverage
+
+The source contains seven network adapters: three aggregators and four direct adapters.
+The target registry contains four channels. No adapter is scaffold-only.
+
+| Aggregator | Implemented route | Fields forwarded |
+| --- | --- | --- |
+| Content Rabbit | ✓ Draft, then publish | Text, targets, optional first comment; no media URLs or link |
+| Zernio | ✓ Create with publish-now | Text, targets, media URLs; no link or first comment |
+| Ayrshare | ✓ Post | Text, targets, media URLs; link appended to text |
+
+| Direct channel | Implemented route | Media behavior | Shared text limit |
+| --- | --- | --- | --- |
+| X (Twitter) | ✓ Create tweet | Text only; rejects media URLs | 280 |
+| LinkedIn | ✓ UGC post | Text or article link; rejects media URLs | 3,000 |
+| TikTok | ✓ Download, upload, read status once | First video URL only | 2,200 |
+| Meta Instagram | ✓ Container, then publish | First image or video URL only | 2,200 |
+
+These are code paths tested with mocked responses, not a claim of current vendor certification.
+This rewrite includes zero credential-checked integrations. Remote permissions and API compatibility require live validation.
+The text limits above are package constants, not a complete statement of platform limits.
+
+## Common use cases
+
+1. Launch teams: preview text for X and LinkedIn before sending through a selected aggregator.
+2. Agency developers: separate brand queues in a Node.js application and drain one brand at a time.
+3. Agent developers: review MCP publishing plans before enabling an approval-backed live send.
+4. Media teams: select the direct TikTok or Instagram adapter for a single public media URL.
+
+## Features
+
+- Ordered fallback returns a receipt and attempt history after the first adapter success.
+- Brand queues use memory or local JSON file storage.
+- Approval hooks support explicit allow, deny, and HTTP decisions.
+- Optional SDK guards check text before dispatch.
+- A reusable `Pacer` tracks per-channel intervals in memory.
+- Process-local cost reports record successful text-length units and zero units for failed adapter attempts.
+
+## Runtime surfaces
+
+SDK exports include `publishPost`, adapter selectors, seven adapter classes, `BrandQueue`, two queue stores, `Pacer`, and three approval hooks.
+Core router, logging, guards, text-summary, and cost helpers are also re-exported.
+CLI commands are `publish`, `queue`, `pacing`, `costs`, and `mcp`.
+Queue subcommands are `enqueue`, `list`, `remove`, and `drain`.
+Use `--help` or `-h` for help, and `--version` or `-V` for the version.
+`--adapter all` selects the three-aggregator default chain, not all seven adapters.
+
+Start stdio MCP with `npx agentic-publish mcp` or `npx --package agentic-publish agentic-publish-mcp`.
+Its seven tools are `publish_post`, `queue_enqueue`, `queue_list`, `queue_remove`, `queue_drain`, `pacing_status`, and `get_cost_report`.
+Publishing and drains default to dry runs. Pass `dryRun: false` for a live MCP request.
+The source Worker has `GET /health`, `GET /limits`, and `POST /preview`; it has no live publishing route.
+
+## Delivery and behavior limits
+
+Preview each post and drain first. Obtain approval for every live post and honor guard denials.
+The SDK requires an approval hook for live publishing. CLI and MCP can obtain one from the environment.
+A preview does not call individual adapters, validate media requirements, or confirm account access.
+Select a direct adapter with its matching single target; direct adapters do not enforce target-to-adapter matching.
+
+Fallback stops after the first successful adapter, not after each channel succeeds.
+Partial remote publication followed by an error can produce duplicates through a later adapter.
+There are no idempotency keys or automatic reconciliation. Inspect vendor state before retrying uncertain results.
+HTTP requests default to ten-second timeouts; the chain proceeds to another adapter after a failure.
+TikTok reads status once and can return a receipt while processing continues.
+Instagram reels default to ten status reads, five seconds apart.
+
+Content Rabbit ignores media URLs and links. Do not route media through its default-first position and expect uploads.
+X ignores the separate `link` field; include links in its text.
+Only the SDK exposes `firstComment`, and only Content Rabbit forwards it.
+Appended links can exceed limits because validation checks the original text length.
+
+SDK guards and pacing apply only when supplied. CLI publishing and drains supply neither guards nor a pacer.
+The CLI `pacing` command prints character-limit metadata only.
+MCP creates a shared pacer, but guards still require injection.
+Default pacer gaps are 90 seconds for X, 180 seconds for LinkedIn, and 300 seconds for TikTok and Instagram.
+The pacer adds less than 15 seconds of jitter. State resets with the process and is not shared across workers.
+Pacing does not guarantee platform policy compliance or prevent account restrictions.
+
+Queue previews list planned IDs without publishing or removing entries.
+Live drains remove successful entries and retain failed entries with increased attempt counts; a failure does not stop later entries.
+File storage has no concurrent-writer lock or background scheduler.
+Cost reports are process-local text units, not currency; separate CLI invocations do not retain totals.
+
+## Integration guides
+
+Export credentials in your shell or secret store. The package does not load `.env` files automatically.
+
+| Adapter | Environment |
+| --- | --- |
+| Content Rabbit | `CONTENT_RABBIT_API_KEY` |
+| Zernio | `ZERNIO_API_KEY` |
+| Ayrshare | `AYRSHARE_API_KEY` |
+| X (Twitter) | `X_BEARER_TOKEN` with user context |
+| LinkedIn | `LINKEDIN_ACCESS_TOKEN`, `LINKEDIN_AUTHOR_URN` |
+| TikTok | `TIKTOK_ACCESS_TOKEN`, `TIKTOK_OPEN_ID` |
+| Meta Instagram | `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID` |
+
+Network adapters accept constructor `apiKey`, `fetchFn`, `baseUrl`, and `timeoutMs` options.
+Live CLI publishing needs `--live` plus an approval source.
+Set `AGENTIC_APPROVE_URL` to an HTTP approval service; optional `AGENTIC_APPROVE_KEY` supplies bearer authentication.
+The service receives `{ post, context }` and must return `{ approved: boolean }`.
+Use `--auto-approve` or `AGENTIC_PUBLISH_AUTO_APPROVE=1` only for posts already authorized by the user.
+Auto-approval takes precedence over the HTTP hook.
+
+```sh
+npx agentic-publish queue enqueue --brand acme --text "Hello" --targets x
+npx agentic-publish queue list --brand acme
+npx agentic-publish queue drain --brand acme
+```
+
+Expect a queued entry, its list, and a drain plan. No post is published.
+The default queue file is `.agentic-publish-queue.json`; set `AGENTIC_PUBLISH_QUEUE` to change it.
+Read `getCostReport()` or MCP `get_cost_report` in the same process after live work.
+
+- [Ayrshare social API setup](https://www.ayrshare.com/docs/introduction)
+- [Package onboarding](https://github.com/pooriaarab/agentic-publish/blob/main/docs/onboarding.md)
+- [Core contract reference](https://github.com/pooriaarab/agentic-publish/blob/main/docs/agentic-core.md)
+
+## Status
+
+Version 0.1.0 is pre-1.0; interfaces can change.
+[Report reproducible issues](https://github.com/pooriaarab/agentic-publish/issues) with redacted credentials.
+Public case studies are not yet published in this repository.
+
+## FAQ
+
+### What is agentic-publish?
+
+agentic-publish routes social posts through a selected adapter chain.
+It also exposes local brand queues, previews, and approval hooks.
+
+### Which integrations are verified?
+
+agentic-publish has mocked tests for its adapter behavior.
+This rewrite does not credential-check any of the seven network adapters.
+
+### Does agentic-publish provide a managed publishing service?
+
+agentic-publish runs in your environment and uses your vendor accounts.
+It does not host a scheduler or connect social accounts for you.
+
+### How is agentic-publish different from Ayrshare?
+
+agentic-publish is a local router that can call Ayrshare or other adapters.
+Ayrshare supplies a managed social media API with its own connected-account setup.
+
+### Does a dry run verify credentials?
+
+agentic-publish previews shared validation and adapter selection.
+It makes no vendor calls and cannot verify credentials or platform permissions.
+
+### Does the CLI enforce pacing?
+
+agentic-publish CLI calls do not instantiate a pacer.
+Use the MCP server's shared pacer or supply a reusable SDK `Pacer` for paced publishing.
+
+### Can fallback create duplicate posts?
+
+agentic-publish can try another adapter after a partial remote success raises an error.
+Inspect vendor state before retrying; the router does not deduplicate posts.
+
+### Does the default chain forward media everywhere?
+
+agentic-publish's Content Rabbit adapter does not forward media URLs.
+Choose an adapter whose payload supports the required fields.
+
+### Are queued posts scheduled automatically?
+
+agentic-publish drains only when called.
+It does not run a background scheduler, and a preview leaves all entries queued.
+
+## Development
+
+```sh
+npm ci
+npm run build
+npm run typecheck
+npm test
+```
+
+## License
+
+MIT
